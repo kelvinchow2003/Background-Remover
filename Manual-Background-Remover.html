@@ -45,7 +45,9 @@
             background-color: rgba(79, 70, 229, 0.1); /* Light fill */
             border-radius: 50%;
             z-index: 10;
-            transform: translate(-50%, -50%); /* Center based on mouse position */
+            left: 0; /* Initialize position */
+            top: 0; /* Initialize position */
+            transform: translate(-50%, -50%); /* CRITICAL: Keeps indicator perfectly centered on cursor */
             box-shadow: 0 0 5px rgba(0, 0, 0, 0.2);
             transition: width 0.1s, height 0.1s; /* Smooth size change */
         }
@@ -389,8 +391,9 @@
                 const x = e.clientX - rect.left;
                 const y = e.clientY - rect.top;
                 
-                // Position the indicator centered on the cursor
-                brushIndicator.style.transform = `translate(${x}px, ${y}px)`;
+                // Position the indicator using left/top, relying on CSS transform for centering
+                brushIndicator.style.left = `${x}px`;
+                brushIndicator.style.top = `${y}px`;
                 
                 // Only show if cursor is over the canvas
                 if (e.target === canvas) {
@@ -409,7 +412,8 @@
             
             // Set indicator size and position on touch start
             updateBrushIndicator(brushSize);
-            brushIndicator.style.transform = `translate(${x}px, ${y}px)`;
+            brushIndicator.style.left = `${x}px`;
+            brushIndicator.style.top = `${y}px`;
             brushIndicator.classList.remove('hidden');
 
             startDrawing(e);
@@ -419,7 +423,8 @@
              const rect = canvasContainer.getBoundingClientRect();
              const x = e.touches[0].clientX - rect.left;
              const y = e.touches[0].clientY - rect.top;
-             brushIndicator.style.transform = `translate(${x}px, ${y}px)`;
+             brushIndicator.style.left = `${x}px`;
+             brushIndicator.style.top = `${y}px`;
 
              continueDrawing(e);
         }, { passive: false });
