@@ -1,0 +1,467 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Manual Background Eraser</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap');
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #f7f9fb;
+        }
+        .container-card {
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.05);
+        }
+        .checkered-background {
+            /* Visually indicate transparency */
+            background-color: #ccc;
+            background-image: linear-gradient(45deg, #eee 25%, transparent 25%), 
+                              linear-gradient(-45deg, #eee 25%, transparent 25%), 
+                              linear-gradient(45deg, transparent 75%, #eee 75%), 
+                              linear-gradient(-45deg, transparent 75%, #eee 75%);
+            background-size: 20px 20px;
+            background-position: 0 0, 0 10px, 10px -10px, -10px 0px;
+        }
+        .button-control {
+            transition: background-color 0.2s, box-shadow 0.2s;
+        }
+        .button-control:hover:not(:disabled) {
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+        }
+        #drawing-canvas {
+            cursor: none; /* Hide default cursor to use custom indicator */
+            display: block;
+            touch-action: none; /* Prevents mobile scrolling while drawing */
+            max-width: 100%;
+            height: auto;
+        }
+        /* Custom Brush Indicator */
+        #brush-indicator {
+            position: absolute;
+            pointer-events: none; /* Crucial: ensures it doesn't block events on the canvas */
+            border: 2px solid #4f46e5; /* Indigo-600 */
+            background-color: rgba(79, 70, 229, 0.1); /* Light fill */
+            border-radius: 50%;
+            z-index: 10;
+            transform: translate(-50%, -50%); /* Center based on mouse position */
+            box-shadow: 0 0 5px rgba(0, 0, 0, 0.2);
+            transition: width 0.1s, height 0.1s; /* Smooth size change */
+        }
+        /* Style for the range input */
+        input[type="range"] {
+            -webkit-appearance: none;
+            width: 100%;
+            height: 8px;
+            background: #d1d5db;
+            border-radius: 5px;
+            outline: none;
+            transition: opacity .2s;
+        }
+        input[type="range"]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            appearance: none;
+            width: 20px;
+            height: 20px;
+            border-radius: 50%;
+            background: #4f46e5;
+            cursor: pointer;
+            box-shadow: 0 0 5px rgba(0,0,0,0.2);
+        }
+    </style>
+</head>
+<body class="min-h-screen flex flex-col items-center p-4">
+    <div class="container-card w-full max-w-4xl bg-white rounded-xl p-6 md:p-8">
+        <h1 class="text-3xl font-bold text-gray-900 mb-2">Manual Background Eraser</h1>
+        <p class="text-gray-600 mb-6">Load an image, use the eraser tool for precision, and use **Undo/Redo** for perfect results.</p>
+
+        <!-- Image Input and Controls -->
+        <div class="grid grid-cols-1 md:grid-cols-6 gap-4 mb-6">
+            <div class="md:col-span-2">
+                <label class="block text-sm font-medium text-gray-700 mb-1" for="image-upload">1. Upload Image</label>
+                <input type="file" id="image-upload" accept="image/png, image/jpeg" class="block w-full text-sm text-gray-500
+                    file:mr-4 file:py-2 file:px-4
+                    file:rounded-full file:border-0
+                    file:text-sm file:font-semibold
+                    file:bg-indigo-50 file:text-indigo-600
+                    hover:file:bg-indigo-100" />
+            </div>
+
+            <div class="flex items-end justify-between md:col-span-4 space-x-2">
+                <button id="undo-button" disabled
+                    class="button-control w-1/4 py-2 px-2 md:px-4 bg-gray-500 text-white font-semibold rounded-xl disabled:bg-gray-300 hover:bg-gray-600">
+                    Undo (Z)
+                </button>
+                <button id="redo-button" disabled
+                    class="button-control w-1/4 py-2 px-2 md:px-4 bg-gray-500 text-white font-semibold rounded-xl disabled:bg-gray-300 hover:bg-gray-600">
+                    Redo (Y)
+                </button>
+                <button id="reset-button" disabled
+                    class="button-control w-1/4 py-2 px-2 md:px-4 bg-yellow-500 text-white font-semibold rounded-xl disabled:bg-gray-300 hover:bg-yellow-600">
+                    Reset
+                </button>
+                <button id="download-button" disabled
+                    class="button-control w-1/4 py-2 px-2 md:px-4 bg-green-600 text-white font-semibold rounded-xl disabled:bg-gray-300 hover:bg-green-700">
+                    Download PNG
+                </button>
+            </div>
+        </div>
+        
+        <!-- Brush Controls -->
+        <div class="bg-gray-50 p-4 rounded-xl mb-6">
+            <label class="block text-lg font-medium text-gray-700 mb-3 flex items-center">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 mr-2 text-indigo-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                </svg>
+                Eraser Size: <span id="brush-size-display" class="ml-2 font-bold text-indigo-600">20</span>px
+            </label>
+            <input type="range" id="brush-size-slider" min="5" max="100" value="20">
+        </div>
+
+        <!-- Canvas Area -->
+        <div id="canvas-container" class="relative w-full overflow-hidden border-4 border-gray-300 rounded-xl checkered-background min-h-[400px] flex items-center justify-center">
+            <canvas id="drawing-canvas" class="hidden"></canvas>
+            <!-- Custom Brush Indicator -->
+            <div id="brush-indicator" class="hidden absolute pointer-events-none rounded-full border-2 border-indigo-600 opacity-70"></div>
+            <p id="placeholder-text" class="text-gray-500 text-center p-10">Upload an image above to start erasing its background.</p>
+        </div>
+        
+    </div>
+
+    <script type="module">
+        // --- Firebase Initialization (Kept for environment compatibility, but not used for core logic) ---
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+        import { getAuth, signInAnonymously, signInWithCustomToken } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        import { getFirestore, setLogLevel } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+
+        const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : null;
+        const initialAuthToken = typeof __initial_auth_token !== 'undefined' ? __initial_auth_token : null;
+        let db, auth;
+
+        async function initializeFirebase() {
+            if (firebaseConfig) {
+                try {
+                    const app = initializeApp(firebaseConfig);
+                    db = getFirestore(app);
+                    auth = getAuth(app);
+                    setLogLevel('debug');
+
+                    if (initialAuthToken) {
+                        await signInWithCustomToken(auth, initialAuthToken);
+                    } else {
+                        await signInAnonymously(auth);
+                    }
+                    console.log("Firebase initialized and user signed in.");
+                } catch (e) {
+                    console.error("Firebase initialization failed:", e);
+                }
+            } else {
+                console.warn("Firebase config not available. Proceeding without database connection.");
+            }
+        }
+        
+        // --- DOM Elements ---
+        const imageUpload = document.getElementById('image-upload');
+        const canvas = document.getElementById('drawing-canvas');
+        const ctx = canvas.getContext('2d');
+        const canvasContainer = document.getElementById('canvas-container');
+        const placeholderText = document.getElementById('placeholder-text');
+        const resetOriginalButton = document.getElementById('reset-button');
+        const downloadButton = document.getElementById('download-button');
+        const brushSizeSlider = document.getElementById('brush-size-slider');
+        const brushSizeDisplay = document.getElementById('brush-size-display');
+        const brushIndicator = document.getElementById('brush-indicator');
+        const undoButton = document.getElementById('undo-button');
+        const redoButton = document.getElementById('redo-button');
+        
+        // --- State Variables ---
+        let isDrawing = false;
+        let brushSize = parseInt(brushSizeSlider.value);
+        let originalImage = null; // Store the original Image object
+
+        // History State
+        const MAX_HISTORY = 20; // Limit history size
+        let history = [];
+        let historyStep = -1;
+
+        // --- History Management ---
+
+        /** Saves the current canvas state to the history array. */
+        function saveState() {
+            if (!originalImage) return;
+
+            if (historyStep < history.length - 1) {
+                // If we are in the middle of history (after undoing),
+                // clear all forward states (redo states) before adding a new one.
+                history = history.slice(0, historyStep + 1);
+            }
+            
+            // Limit history size by removing the oldest state
+            if (history.length >= MAX_HISTORY) {
+                history.shift(); 
+            }
+            
+            history.push(canvas.toDataURL());
+            historyStep = history.length - 1;
+            
+            updateUndoRedoButtons();
+        }
+
+        /** Restores the canvas to a specific state in the history. */
+        function restoreState(step) {
+            if (step >= 0 && step < history.length) {
+                historyStep = step;
+                const img = new Image();
+                img.onload = () => {
+                    // Restore only the image content, preserving canvas size
+                    ctx.clearRect(0, 0, canvas.width, canvas.height);
+                    ctx.drawImage(img, 0, 0);
+                    updateUndoRedoButtons();
+                };
+                img.src = history[historyStep];
+            }
+        }
+        
+        function updateUndoRedoButtons() {
+            // Disable undo if at the very first state (step 0)
+            undoButton.disabled = historyStep <= 0;
+            // Disable redo if at the newest state
+            redoButton.disabled = historyStep >= history.length - 1;
+        }
+
+        function undo() {
+            if (historyStep > 0) {
+                restoreState(historyStep - 1);
+            }
+        }
+        
+        function redo() {
+            if (historyStep < history.length - 1) {
+                restoreState(historyStep + 1);
+            }
+        }
+
+        // --- Canvas Loading & UI ---
+
+        function loadCanvas(img) {
+            // Set canvas size to match the image
+            const aspectRatio = img.naturalWidth / img.naturalHeight;
+            const padding = 40;
+            let targetWidth = canvasContainer.clientWidth - padding; 
+            let targetHeight = targetWidth / aspectRatio;
+
+            // Constrain height if it's too large 
+            if (targetHeight > 600) {
+                targetHeight = 600;
+                targetWidth = targetHeight * aspectRatio;
+            }
+
+            canvas.width = img.naturalWidth;
+            canvas.height = img.naturalHeight;
+            
+            // Set display size for responsiveness and visibility
+            canvas.style.width = `${targetWidth}px`;
+            canvas.style.height = `${targetHeight}px`;
+
+            // Draw the image
+            ctx.clearRect(0, 0, canvas.width, canvas.height); 
+            ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+
+            // Initialize history
+            history = [];
+            historyStep = -1;
+            originalImage = img;
+            saveState(); // Save initial state (step 0)
+
+            // Update UI state
+            canvas.classList.remove('hidden');
+            placeholderText.classList.add('hidden');
+            resetOriginalButton.disabled = false;
+            downloadButton.disabled = false;
+        }
+
+        imageUpload.addEventListener('change', (e) => {
+            const file = e.target.files[0];
+            if (file) {
+                const reader = new FileReader();
+                reader.onload = (event) => {
+                    const img = new Image();
+                    img.onload = () => loadCanvas(img);
+                    img.src = event.target.result;
+                };
+                reader.readAsDataURL(file);
+            }
+        });
+
+        resetOriginalButton.addEventListener('click', () => {
+            if (originalImage) {
+                loadCanvas(originalImage); // Clears canvas and saves new state
+            }
+        });
+
+        downloadButton.addEventListener('click', () => {
+            if (!originalImage) return;
+
+            // The canvas content (with transparent parts) is exported as PNG
+            const dataURL = canvas.toDataURL('image/png');
+            const link = document.createElement('a');
+            link.href = dataURL;
+            link.download = 'manual_transparent_bg.png';
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+        });
+
+        brushSizeSlider.addEventListener('input', (e) => {
+            brushSize = parseInt(e.target.value);
+            brushSizeDisplay.textContent = brushSize;
+            updateBrushIndicator(brushSize);
+        });
+        
+        // --- Drawing/Erasing Logic ---
+
+        /**
+         * Converts mouse/touch coordinates (relative to canvas display size) 
+         * to canvas coordinates (relative to internal pixel size).
+         */
+        function getCanvasCoordinates(clientX, clientY) {
+            const rect = canvas.getBoundingClientRect();
+            const scaleX = canvas.width / rect.width;
+            const scaleY = canvas.height / rect.height;
+
+            return {
+                x: (clientX - rect.left) * scaleX,
+                y: (clientY - rect.top) * scaleY
+            };
+        }
+
+        function erase(x, y) {
+            // Set up the context for erasing
+            ctx.globalCompositeOperation = 'destination-out'; // Makes subsequent draws clear pixels
+            ctx.beginPath();
+            ctx.arc(x, y, brushSize / 2, 0, Math.PI * 2);
+            ctx.fill();
+            // Restore context for regular drawing (though we only erase)
+            ctx.globalCompositeOperation = 'source-over';
+        }
+
+        function startDrawing(e) {
+            e.preventDefault();
+            isDrawing = true;
+            const pos = getCanvasCoordinates(e.clientX || e.touches[0].clientX, e.clientY || e.touches[0].clientY);
+            erase(pos.x, pos.y);
+        }
+
+        function continueDrawing(e) {
+            e.preventDefault();
+            if (!isDrawing) return;
+            const pos = getCanvasCoordinates(e.clientX || e.touches[0].clientX, e.clientY || e.touches[0].clientY);
+            erase(pos.x, pos.y);
+        }
+
+        function stopDrawing() {
+            if (isDrawing) {
+                saveState(); // Save state only after drawing finishes
+            }
+            isDrawing = false;
+        }
+
+        // --- Custom Cursor / Indicator Logic ---
+
+        function updateBrushIndicator(size) {
+            brushIndicator.style.width = `${size}px`;
+            brushIndicator.style.height = `${size}px`;
+        }
+
+        // Hide indicator when mouse leaves canvas container
+        canvasContainer.addEventListener('mouseleave', () => {
+            brushIndicator.classList.add('hidden');
+            if (isDrawing) {
+                stopDrawing(); // Save state if drawing stops abruptly
+            }
+        });
+        
+        // Show and position indicator when mouse moves over canvas area
+        canvasContainer.addEventListener('mousemove', (e) => {
+            if (originalImage) {
+                const rect = canvasContainer.getBoundingClientRect();
+                const x = e.clientX - rect.left;
+                const y = e.clientY - rect.top;
+                
+                // Position the indicator centered on the cursor
+                brushIndicator.style.transform = `translate(${x}px, ${y}px)`;
+                
+                // Only show if cursor is over the canvas
+                if (e.target === canvas) {
+                     brushIndicator.classList.remove('hidden');
+                } else {
+                     brushIndicator.classList.add('hidden');
+                }
+            }
+        });
+
+        // Touch event handling for indicator and drawing
+        canvas.addEventListener('touchstart', (e) => {
+            const rect = canvasContainer.getBoundingClientRect();
+            const x = e.touches[0].clientX - rect.left;
+            const y = e.touches[0].clientY - rect.top;
+            
+            // Set indicator size and position on touch start
+            updateBrushIndicator(brushSize);
+            brushIndicator.style.transform = `translate(${x}px, ${y}px)`;
+            brushIndicator.classList.remove('hidden');
+
+            startDrawing(e);
+        }, { passive: false });
+
+        canvas.addEventListener('touchmove', (e) => {
+             const rect = canvasContainer.getBoundingClientRect();
+             const x = e.touches[0].clientX - rect.left;
+             const y = e.touches[0].clientY - rect.top;
+             brushIndicator.style.transform = `translate(${x}px, ${y}px)`;
+
+             continueDrawing(e);
+        }, { passive: false });
+        
+        canvas.addEventListener('touchend', () => {
+            brushIndicator.classList.add('hidden');
+            stopDrawing();
+        });
+
+
+        // --- Attach General Listeners ---
+        if (canvas) {
+            // Mouse Events
+            canvas.addEventListener('mousedown', startDrawing);
+            canvas.addEventListener('mousemove', continueDrawing);
+            window.addEventListener('mouseup', stopDrawing); 
+
+            // Undo/Redo Button Listeners
+            undoButton.addEventListener('click', undo);
+            redoButton.addEventListener('click', redo);
+        }
+
+        // Keyboard Shortcuts for Undo/Redo
+        document.addEventListener('keydown', (e) => {
+            // Check for Ctrl (Windows/Linux) or Cmd (Mac)
+            if (e.ctrlKey || e.metaKey) { 
+                if (e.key === 'z') {
+                    e.preventDefault();
+                    undo();
+                } else if (e.key === 'y' || (e.shiftKey && e.key === 'Z')) { // Ctrl+Y or Ctrl+Shift+Z for redo
+                    e.preventDefault();
+                    redo();
+                }
+            }
+        });
+
+        // --- Initial Setup ---
+        window.onload = () => {
+            initializeFirebase();
+            updateBrushIndicator(brushSize);
+        }
+
+    </script>
+</body>
+</html>
